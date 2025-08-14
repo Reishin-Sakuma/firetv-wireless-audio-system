@@ -32,7 +32,7 @@ Android (Spotify) → [Bluetooth A2DP] → ESP32 → [WiFi AP + HTTP Stream] →
 
 ### 必須実装機能
 1. **PlatformIOプロジェクト作成**
-   - プロジェクト名: `esp32-audio-bridge`
+   - プロジェクト名: `firetv-wireless-audio-system`
    - ESP32 Dev Module対応
    - 必要ライブラリの自動インストール設定
 
@@ -51,7 +51,7 @@ Android (Spotify) → [Bluetooth A2DP] → ESP32 → [WiFi AP + HTTP Stream] →
 
 ### ファイル構成要求
 ```
-esp32-audio-bridge/
+firetv-wireless-audio-system/
 ├── platformio.ini          # ESP32設定・ライブラリ依存関係
 ├── src/
 │   ├── main.cpp            # メインループ・初期化
@@ -239,7 +239,7 @@ pio pkg update
 
 1. **プロジェクト作成**
    ```bash
-   mkdir esp32-audio-bridge && cd esp32-audio-bridge
+   mkdir firetv-wireless-audio-system && cd firetv-wireless-audio-system
    pio project init --board esp32dev
    ```
 
