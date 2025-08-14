@@ -2,6 +2,7 @@
 #define BLUETOOTH_A2DP_H
 
 #include "config.h"
+#include "esp_a2dp_api.h"
 
 class BluetoothA2DP {
 private:

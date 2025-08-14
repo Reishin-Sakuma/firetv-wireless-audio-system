@@ -1,5 +1,9 @@
 #include "bluetooth_a2dp.h"
 #include "BluetoothA2DPSink.h"
+#include "esp_a2dp_api.h"
+#include <Arduino.h>
+#include <ESP.h>
+#include "esp_task_wdt.h"
 
 BluetoothA2DPSink a2dp_sink;
 BluetoothA2DP* instancePtr = nullptr;
@@ -16,20 +20,25 @@ BluetoothA2DP::~BluetoothA2DP() {
 bool BluetoothA2DP::init() {
     Serial.println("[BLUETOOTH] Initializing A2DP Sink...");
     
-    a2dp_sink.set_pin_code(BT_PIN_CODE);
+    // CPU負荷軽減: 音声コールバックを無効設定で初期化
     a2dp_sink.set_stream_reader(audioDataCallback, false);
     a2dp_sink.set_on_connection_state_changed(connectionStateCallback);
     
-    if (a2dp_sink.start(BT_DEVICE_NAME)) {
-        initialized = true;
-        Serial.print("[BLUETOOTH] Device discoverable: ");
-        Serial.println(BT_DEVICE_NAME);
-        Serial.println("[BLUETOOTH] Waiting for connection...");
-        return true;
-    } else {
-        Serial.println("[BLUETOOTH] ERROR: Failed to initialize A2DP sink");
-        return false;
-    }
+    // CPU分散のためdelay追加
+    delay(100);
+    esp_task_wdt_reset();
+    
+    a2dp_sink.start(BT_DEVICE_NAME);
+    initialized = true;
+    Serial.print("[BLUETOOTH] Device discoverable: ");
+    Serial.println(BT_DEVICE_NAME);
+    Serial.println("[BLUETOOTH] Waiting for connection...");
+    
+    // 初期化後のCPU負荷軽減
+    delay(500);
+    esp_task_wdt_reset();
+    
+    return true;
 }
 
 void BluetoothA2DP::cleanup() {
@@ -48,18 +57,26 @@ bool BluetoothA2DP::isConnected() {
 void BluetoothA2DP::loop() {
     if (!initialized) return;
     
+    // ウォッチドッグリセット
+    esp_task_wdt_reset();
+    
     static unsigned long lastStatusLog = 0;
     unsigned long currentTime = millis();
     
     if (currentTime - lastStatusLog > 10000) {
         logStatus();
         lastStatusLog = currentTime;
+        esp_task_wdt_reset(); // ログ後にリセット
     }
     
     if (!isConnected() && (currentTime - lastConnectionAttempt > RECONNECT_INTERVAL)) {
         attemptReconnection();
         lastConnectionAttempt = currentTime;
+        esp_task_wdt_reset(); // 再接続処理後にリセット
     }
+    
+    // CPU負荷軽減のためのyield
+    yield();
 }
 
 void BluetoothA2DP::connectionStateCallback(esp_a2d_connection_state_t state, void* ptr) {
@@ -85,8 +102,7 @@ void BluetoothA2DP::handleConnectionState(esp_a2d_connection_state_t state) {
             break;
         case ESP_A2D_CONNECTION_STATE_CONNECTED:
             connected = true;
-            Serial.print("[BLUETOOTH] Device connected: ");
-            Serial.println(a2dp_sink.get_connected_source_name());
+            Serial.println("[BLUETOOTH] Device connected");
             break;
         case ESP_A2D_CONNECTION_STATE_DISCONNECTING:
             Serial.println("[BLUETOOTH] Device disconnecting...");
@@ -95,29 +111,10 @@ void BluetoothA2DP::handleConnectionState(esp_a2d_connection_state_t state) {
 }
 
 void BluetoothA2DP::handleAudioData(const uint8_t* data, uint32_t len) {
-    static unsigned long totalBytes = 0;
-    static unsigned long lastReport = 0;
-    
-    totalBytes += len;
-    unsigned long currentTime = millis();
-    
-    if (currentTime - lastReport > 5000) {
-        Serial.print("[AUDIO] Data received: ");
-        Serial.print(len);
-        Serial.print(" bytes, Total: ");
-        Serial.print(totalBytes);
-        Serial.print(" bytes, Rate: ");
-        Serial.print((totalBytes * 8) / ((currentTime - lastReport) / 1000.0), 0);
-        Serial.println(" bps");
-        
-        Serial.print("[AUDIO] Sample rate: ");
-        Serial.print(SAMPLE_RATE);
-        Serial.print("Hz, Channels: ");
-        Serial.println(CHANNELS);
-        
-        lastReport = currentTime;
-        totalBytes = 0;
-    }
+    // 音声データは受信するが処理は完全に無効化
+    // ウォッチドッグタイマー対策のため、何も処理しない
+    (void)data; // 未使用変数警告を回避
+    (void)len;  // 未使用変数警告を回避
 }
 
 void BluetoothA2DP::attemptReconnection() {

@@ -3,7 +3,12 @@
     "allow": [
       "Bash(mkdir:*)",
       "Bash(git add:*)",
-      "Bash(gemini:*)"
+      "Bash(gemini:*)",
+      "Bash(pio lib search:*)",
+      "Bash(platformio run:*)",
+      "Bash(python -m platformio run)",
+      "Bash(pio run:*)",
+      "Bash(python:*)"
     ],
     "deny": []
   }
