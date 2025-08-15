@@ -1,0 +1,20 @@
+# PulseAudio configuration for AudioBridge-Pi
+# /etc/pulse/default.pa
+
+# Load audio drivers
+load-module module-alsa-sink
+load-module module-alsa-source device=hw:1,0
+load-module module-native-protocol-unix
+
+# Bluetooth support
+load-module module-bluetooth-discover
+load-module module-bluetooth-policy
+
+# Automatic switching
+load-module module-switch-on-port-available
+
+# Network streaming (optional)
+load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1;192.168.4.0/24
+
+# Default sink setup - will be overridden by Bluetooth when connected
+set-default-sink 0

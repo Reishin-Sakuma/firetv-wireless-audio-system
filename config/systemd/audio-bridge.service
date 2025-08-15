@@ -1,0 +1,36 @@
+[Unit]
+Description=AudioBridge-Pi Bluetooth to WiFi Audio Streaming Service
+Documentation=man:audio-bridge(1)
+Wants=network-online.target bluetooth.service pulseaudio.service
+After=network-online.target bluetooth.service pulseaudio.service
+Requires=bluetooth.service
+
+[Service]
+Type=simple
+User=pi
+Group=audio
+ExecStart=/usr/local/bin/audio-bridge
+Restart=on-failure
+RestartSec=30
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+Environment=AUDIO_BITRATE=128
+Environment=LOG_LEVEL=INFO
+
+# Working directory
+WorkingDirectory=/opt/audio-bridge-pi
+
+# Resource limits
+LimitNOFILE=65536
+PrivateTemp=yes
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=audio-bridge
+
+[Install]
+WantedBy=multi-user.target
