@@ -19,6 +19,7 @@ TimeoutStopSec=30
 Environment=PYTHONUNBUFFERED=1
 Environment=AUDIO_BITRATE=128
 Environment=LOG_LEVEL=INFO
+Environment=PYTHONPATH=/opt/audio-bridge-pi
 
 # Working directory
 WorkingDirectory=/opt/audio-bridge-pi

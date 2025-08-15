@@ -72,7 +72,30 @@ apt install -y \
 
 # Python依存関係インストール
 log_step "Python依存関係をインストール中..."
-pip3 install -r requirements.txt
+
+# Python 3.11+ 対応：仮想環境またはシステムパッケージを使用
+if python3 -c "import sys; exit(0 if sys.version_info >= (3,11) else 1)" 2>/dev/null; then
+    log_info "Python 3.11+ 検出 - システムパッケージ経由でインストール"
+    
+    # システムパッケージでインストール可能な依存関係
+    apt install -y \
+        python3-flask \
+        python3-dbus \
+        python3-gi \
+        python3-gi-cairo \
+        python3-psutil \
+        python3-yaml \
+        python3-pip \
+        python3-venv
+    
+    # pip専用パッケージは--break-system-packagesで対処
+    log_info "pip専用パッケージをインストール中..."
+    pip3 install --break-system-packages pulsectl netifaces
+    
+else
+    log_info "Python 3.10以下 - pip経由でインストール"
+    pip3 install -r requirements.txt
+fi
 
 # Bluetoothサービス設定
 log_step "Bluetooth設定中..."
@@ -145,7 +168,26 @@ systemctl enable audio-bridge
 
 # アプリケーションインストール
 log_step "アプリケーションをインストール中..."
-python3 setup.py install
+
+# アプリケーション用ディレクトリ作成
+mkdir -p /opt/audio-bridge-pi
+cp -r audio_bridge /opt/audio-bridge-pi/
+cp -r config /opt/audio-bridge-pi/
+cp requirements.txt /opt/audio-bridge-pi/
+cp setup.py /opt/audio-bridge-pi/
+chown -R pi:pi /opt/audio-bridge-pi
+
+# 実行可能バイナリ作成
+cat > /usr/local/bin/audio-bridge << 'EOF'
+#!/bin/bash
+cd /opt/audio-bridge-pi
+export PYTHONPATH="/opt/audio-bridge-pi:$PYTHONPATH"
+python3 -m audio_bridge.main "$@"
+EOF
+
+chmod +x /usr/local/bin/audio-bridge
+
+log_info "AudioBridge-Pi を /opt/audio-bridge-pi にインストールしました"
 
 # ログディレクトリ作成
 mkdir -p /var/log/audio-bridge

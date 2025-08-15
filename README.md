@@ -56,6 +56,22 @@ sudo ./scripts/setup.sh
 sudo reboot
 ```
 
+#### 🔧 Python環境エラーが発生した場合
+
+**Raspberry Pi OS Bookworm (2023年10月以降)** で`externally-managed-environment`エラーが出る場合：
+
+```bash
+# 手動対処方法
+sudo apt update && sudo apt install -y \
+    python3-flask python3-dbus python3-gi python3-psutil python3-yaml
+
+# pip専用パッケージのみ個別インストール  
+pip3 install --break-system-packages pulsectl netifaces
+
+# その後セットアップ継続
+sudo ./scripts/setup.sh
+```
+
 ### 3. 即座に使用開始
 
 **Android側（Bluetooth接続）:**
