@@ -2,278 +2,368 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# ESP32 Bluetooth-WiFi オーディオブリッジ開発プロジェクト
+# Claude Code: Raspberry Pi Zero 2 W Bluetooth-WiFi音楽ブリッジ開発
 
 ## 🎯 プロジェクト目標
 
-**車載環境で Android（Spotify）→ ESP32 → Fire TV Stick の音楽ストリーミング環境を構築**
+**車載環境で Android（Spotify）→ Raspberry Pi → Fire TV Stick の音楽ストリーミング環境を構築**
 
 ```
-Android (Spotify) → [Bluetooth A2DP] → ESP32 → [WiFi AP + HTTP Stream] → Fire TV Stick (VLC)
+Android (Spotify) → [Bluetooth A2DP] → Raspberry Pi Zero 2W → [WiFi AP + HTTP Stream] → Fire TV Stick (VLC)
 ```
 
 ## 📋 技術仕様
 
 ### ハードウェア
-- **ESP32**: ESP32 Dev Module (esp32dev)
-- **メモリ**: 520KB SRAM (PSRAM拡張なし)
-- **音質**: Spotify最高音質 320kbps = 40KB/秒
-- **バッファ**: 160KB (4秒分の音声バッファ確保可能)
+- **Raspberry Pi Zero 2 W**: クアッドコア1GHz、512MB RAM
+- **OS**: Raspberry Pi OS Lite (Headless)
+- **ストレージ**: microSDカード 16GB以上
+- **音質**: Spotify最高音質 320kbps対応
+- **遅延**: 200-400ms（実用的）
 
 ### ソフトウェアアーキテクチャ
-- **Core 0**: WiFi AP + HTTPストリーミングサーバー専用
-- **Core 1**: Bluetooth A2DP Sink + メイン制御
-- **フレームワーク**: Arduino for ESP32
-- **開発環境**: PlatformIO
+```
+┌─────────────────────────────────────┐
+│ Raspberry Pi Zero 2 W (Linux)      │
+├─────────────────────────────────────┤
+│ BlueZ Stack (Bluetooth A2DP Sink)  │
+├─────────────────────────────────────┤
+│ PulseAudio (音声パイプライン)       │
+├─────────────────────────────────────┤
+│ GStreamer (リアルタイム音声変換)    │
+├─────────────────────────────────────┤
+│ Python Flask (HTTPストリーミング)   │
+├─────────────────────────────────────┤
+│ hostapd + dnsmasq (WiFi AP)        │
+└─────────────────────────────────────┘
+```
 
-## 🚀 Phase 1 実装要求
+## 🎯 Phase 1 実装要求
 
-**今回の目標: Bluetooth A2DP Sinkの基本動作確認**
+**今回の目標: Bluetooth A2DP Sinkの基本動作 + WiFi AP + HTTPストリーミング**
 
 ### 必須実装機能
-1. **PlatformIOプロジェクト作成**
-   - プロジェクト名: `firetv-wireless-audio-system`
-   - ESP32 Dev Module対応
-   - 必要ライブラリの自動インストール設定
 
-2. **Bluetooth A2DP Sink実装**
-   - Androidデバイス検出・ペアリング
-   - A2DP接続確立（初回手動、2回目以降自動接続対応）
-   - 音声データ受信（ログ出力で確認）
-   - 接続状態監視
-   - **自動再接続機能**（接続切断時の復旧処理）
+#### 1. **システム基盤構築**
+- Raspberry Pi OS Lite セットアップスクリプト
+- 必要パッケージの自動インストール
+- SSH有効化・基本設定
 
-3. **基本デバッグ機能**
-   - シリアル監視出力
-   - 接続ステータス表示
-   - 受信データ量表示
-   - エラー処理
+#### 2. **Bluetooth A2DP Sink実装**
+- BlueZ設定・自動ペアリング
+- A2DP Sink プロファイル有効化
+- 自動接続・再接続機能
+- 接続状態監視
+
+#### 3. **音声パイプライン構築**
+- PulseAudio設定・音声ルーティング
+- GStreamer パイプライン（Bluetooth → HTTP変換）
+- 音声バッファリング最適化
+- 音質・遅延調整
+
+#### 4. **WiFi Access Point**
+- hostapd設定（AP モード）
+- dnsmasq設定（DHCP・DNS）
+- 固定IP設定（192.168.4.1）
+- ファイアウォール設定
+
+#### 5. **HTTPストリーミングサーバー**
+- Python Flask ベースの音声配信
+- リアルタイムMP3ストリーミング
+- Fire TV Stick VLC対応
+- 複数クライアント対応
+
+#### 6. **システム自動化**
+- systemd サービス設定
+- 起動時自動開始
+- プロセス監視・自動復旧
+- ログ管理
 
 ### ファイル構成要求
 ```
-firetv-wireless-audio-system/
-├── platformio.ini          # ESP32設定・ライブラリ依存関係
+audio-bridge/
+├── setup.sh                   # 初期セットアップスクリプト
+├── install_packages.sh        # パッケージインストール
+├── config/
+│   ├── bluetooth/
+│   │   ├── main.conf          # BlueZ設定
+│   │   └── audio.conf         # A2DP設定
+│   ├── pulseaudio/
+│   │   ├── default.pa         # PulseAudio設定
+│   │   └── daemon.conf        # デーモン設定
+│   ├── hostapd/
+│   │   └── hostapd.conf       # WiFi AP設定
+│   ├── dnsmasq/
+│   │   └── dnsmasq.conf       # DHCP設定
+│   └── systemd/
+│       ├── audio-bridge.service
+│       ├── bluetooth-agent.service
+│       └── wifi-ap.service
 ├── src/
-│   ├── main.cpp            # メインループ・初期化
-│   ├── bluetooth_a2dp.cpp  # A2DP Sink実装
-│   ├── bluetooth_a2dp.h    # A2DPヘッダー
-│   └── config.h            # 設定定数
-├── include/
-└── README.md               # セットアップ・使用方法
+│   ├── audio_bridge.py        # メインアプリケーション
+│   ├── bluetooth_manager.py   # Bluetooth制御
+│   ├── audio_pipeline.py      # 音声処理
+│   ├── http_server.py         # HTTPストリーミング
+│   ├── wifi_manager.py        # WiFi AP制御
+│   └── system_monitor.py      # システム監視
+├── scripts/
+│   ├── start_services.sh      # サービス起動
+│   ├── stop_services.sh       # サービス停止
+│   ├── bluetooth_pair.sh      # ペアリング支援
+│   └── status_check.sh        # 状態確認
+├── logs/                      # ログディレクトリ
+├── README.md                  # セットアップ・使用方法
+└── requirements.txt           # Python依存関係
 ```
 
-### platformio.ini 仕様
-```ini
-[env:esp32dev]
-platform = espressif32
-board = esp32dev
-framework = arduino
-monitor_speed = 115200
-lib_deps = 
-    ESP32-A2DP
-build_flags = 
-    -DCORE_DEBUG_LEVEL=4
-    -DCONFIG_BT_ENABLED=1
-    -DCONFIG_BLUEDROID_ENABLED=1
-```
+## 🔧 技術的実装要求
 
-### 実装技術要求
-
-#### Bluetooth A2DP実装
-```cpp
-// 必須機能
-- esp_a2dp_sink_init() による初期化
-- デバイス検出可能モード設定（常時接続可能）
-- ペアリング要求処理
-- A2DP接続コールバック実装
-- 音声データ受信コールバック実装
-- 接続切断処理
-- 自動再接続ロジック（定期的な接続試行）
-- ペアリング済みデバイス記憶機能
-```
-
-#### 接続方式
-```cpp
-// 初回接続（手動ペアリング必要）
-1. ESP32起動 → 検出可能モード
-2. Android: 設定 → Bluetooth → ESP32-AudioBridge検索
-3. ペアリング実行・登録
-
-// 2回目以降（自動接続期待、保証なし）
-1. ESP32起動 → 既知デバイス自動検索
-2. Android側からの接続待機（10-30秒）
-3. 自動接続失敗時 → 手動接続ガイド表示
-```
-
-#### デバッグ出力例
-```
-[BLUETOOTH] Initializing A2DP Sink...
-[BLUETOOTH] Device discoverable: ESP32-AudioBridge
-[BLUETOOTH] Waiting for connection...
-[BLUETOOTH] Device connected: XX:XX:XX:XX:XX:XX (Device Name)
-[AUDIO] Data received: 1024 bytes
-[AUDIO] Sample rate: 44100Hz, Channels: 2
-[SYSTEM] Free heap: 234KB
-```
-
-## 🔧 開発環境・コマンド
-
-### PlatformIOコマンド（よく使用）
-
+### Bluetooth A2DP設定
 ```bash
-# プロジェクト初期化
-pio project init --board esp32dev
+# /etc/bluetooth/main.conf
+[General]
+Class = 0x200414
+DiscoverableTimeout = 0
+PairableTimeout = 0
+AutoEnable = true
 
-# ビルド
-pio run
+[A2DP]
+Enable = Sink
+AutoConnect = true
+```
 
-# ESP32への書き込み
-pio run --target upload
+### PulseAudio設定
+```bash
+# /etc/pulse/default.pa
+load-module module-bluetooth-discover
+load-module module-bluetooth-policy
+set-default-sink bluez_sink
+```
 
-# シリアル監視
-pio device monitor
+### GStreamer音声パイプライン
+```python
+# 基本パイプライン
+pipeline = "pulsesrc device=bluez_sink.monitor ! audioconvert ! audioresample ! lamemp3enc bitrate=128 ! shout2send"
+```
 
-# クリーンビルド
-pio run --target clean
+### WiFi AP設定
+```bash
+# /etc/hostapd/hostapd.conf
+interface=wlan0
+driver=nl80211
+ssid=AudioBridge-Pi
+hw_mode=g
+channel=7
+wmm_enabled=0
+macaddr_acl=0
+auth_algs=1
+ignore_broadcast_ssid=0
+wpa=2
+wpa_passphrase=audiobridge123
+wpa_key_mgmt=WPA-PSK
+wpa_pairwise=TKIP
+rsn_pairwise=CCMP
+```
 
-# 依存関係更新
-pio pkg update
+### HTTPストリーミング実装
+```python
+from flask import Flask, Response
+import subprocess
+import threading
+
+app = Flask(__name__)
+
+@app.route('/audio.mp3')
+def stream_audio():
+    def generate():
+        cmd = [
+            'gst-launch-1.0',
+            'pulsesrc', 'device=bluez_sink.monitor',
+            '!', 'audioconvert',
+            '!', 'audioresample',
+            '!', 'lamemp3enc', 'bitrate=128',
+            '!', 'fdsink', 'fd=1'
+        ]
+        
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        while True:
+            chunk = process.stdout.read(4096)
+            if not chunk:
+                break
+            yield chunk
+    
+    return Response(generate(), 
+                   mimetype='audio/mpeg',
+                   headers={'Cache-Control': 'no-cache'})
+
+@app.route('/status')
+def status():
+    return {
+        'bluetooth': get_bluetooth_status(),
+        'audio': get_audio_status(),
+        'clients': get_connected_clients()
+    }
 ```
 
 ## 🧪 テスト・検証要求
 
 ### 基本動作テスト
-1. **コンパイル確認**
+1. **Raspberry Pi OS セットアップ**
    ```bash
-   pio run
+   sudo ./setup.sh
+   sudo reboot
    ```
 
-2. **ESP32書き込み**
+2. **Bluetooth接続テスト**
    ```bash
-   pio run --target upload
+   sudo systemctl status bluetooth
+   bluetoothctl discoverable on
+   # Android側でAudioBridge-Pi検索・ペアリング
    ```
 
-3. **シリアル監視**
+3. **音声パイプラインテスト**
    ```bash
-   pio device monitor
+   pulseaudio --check -v
+   pactl list sources | grep bluez
    ```
 
-4. **Bluetooth接続テスト**
-   - **初回**: Android設定 → Bluetooth → ESP32-AudioBridge検索・ペアリング
-   - **2回目**: ESP32再起動 → 自動接続確認（30秒待機）
-   - **手動接続**: 自動失敗時のAndroid操作確認
-   - Spotify再生開始
-   - シリアル出力で音声データ受信確認
-   - **接続切断・再接続テスト**
+4. **WiFi APテスト**
+   ```bash
+   sudo systemctl status hostapd
+   iwconfig wlan0
+   # Fire TV StickでAudioBridge-Pi WiFi接続
+   ```
+
+5. **HTTPストリーミングテスト**
+   ```bash
+   curl -I http://192.168.4.1:8080/audio.mp3
+   # Fire TV Stick VLCで http://192.168.4.1:8080/audio.mp3 再生
+   ```
+
+### 統合テスト
+1. **Android → Raspberry Pi → Fire TV Stick**
+2. **Spotify音楽再生**
+3. **30分連続動作テスト**
+4. **接続切断・再接続テスト**
 
 ### 成功判定基準
-- [ ] ESP32がAndroidから検出される
-- [ ] ペアリングが正常完了する
-- [ ] A2DP接続が確立される
-- [ ] Spotify音声データが受信される（ログ確認）
-- [ ] 接続切断が正常処理される
-- [ ] 30分間の安定動作
+- [ ] Android Bluetooth自動ペアリング成功
+- [ ] Spotify音楽がFire TV Stickで再生される
+- [ ] 音質劣化が最小限（主観評価）
+- [ ] 遅延400ms以内
+- [ ] 30分間の連続再生が安定
+- [ ] 接続切断時の自動復旧機能
 
-## ⚙️ 設定・定数仕様
+## ⚙️ 設定・最適化要求
 
-### config.h 内容
-```cpp
-#ifndef CONFIG_H
-#define CONFIG_H
+### 音質・遅延調整
+```python
+# 音質優先設定
+AUDIO_BITRATE = 320  # kbps
+BUFFER_SIZE = 4096   # bytes
+SAMPLE_RATE = 44100  # Hz
 
-// Bluetooth設定
-#define BT_DEVICE_NAME "ESP32-AudioBridge"
-#define BT_PIN_CODE "0000"
+# 低遅延優先設定  
+AUDIO_BITRATE = 128  # kbps
+BUFFER_SIZE = 1024   # bytes
+LATENCY_TARGET = 200 # ms
+```
 
-// 音声設定  
-#define SAMPLE_RATE 44100
-#define CHANNELS 2
-#define BITS_PER_SAMPLE 16
+### システム最適化
+```bash
+# CPUガバナー設定
+echo performance | sudo tee /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 
-// デバッグ設定
-#define DEBUG_LEVEL 4
-#define SERIAL_BAUD 115200
-
-// バッファ設定（Phase 2用準備）
-#define AUDIO_BUFFER_SIZE (40 * 1024)  // 40KB = 1秒分
-#define BUFFER_COUNT 4
-
-#endif
+# オーディオ優先度調整
+echo '@audio - rtprio 99' | sudo tee -a /etc/security/limits.conf
 ```
 
 ## 📝 ドキュメント要求
 
 ### README.md 必須項目
-1. **ハードウェア要求**
-2. **セットアップ手順**
-3. **Android接続方法**
+1. **ハードウェア要求・セットアップ**
+2. **自動インストール手順**
+3. **Android・Fire TV Stick設定方法**
 4. **トラブルシューティング**
-5. **Phase 2 以降の予定**
+5. **音質・遅延調整方法**
+6. **車載環境での設置方法**
 
-### コード内コメント要求
-- 各関数の役割説明
-- 重要な処理ブロックの説明
-- TODO: Phase 2で実装予定の箇所
-- 潜在的な問題点の注記
+### 操作・保守ガイド
+```bash
+# システム状態確認
+./scripts/status_check.sh
+
+# サービス再起動
+./scripts/restart_services.sh
+
+# ログ確認
+journalctl -u audio-bridge -f
+
+# 音質調整
+sudo nano config/audio_pipeline.conf
+```
 
 ## 🔧 エラーハンドリング要求
 
 ### 必須エラー処理
-1. **Bluetooth初期化失敗**
-2. **ペアリング失敗**
-3. **A2DP接続失敗**
-4. **自動接続タイムアウト**（30秒以内に接続されない）
-5. **音声データ受信エラー**
-6. **メモリ不足**
-7. **接続切断の検出・自動復旧**
+1. **Bluetooth接続失敗・切断**
+2. **音声パイプライン中断**
+3. **WiFi AP接続失敗**
+4. **HTTPストリーミング中断**
+5. **メモリ・CPU使用量異常**
+6. **システムリソース不足**
 
-### ログレベル
-- ERROR: 致命的エラー
-- WARN: 警告・復旧可能エラー
-- INFO: 接続状態変化
-- DEBUG: 詳細デバッグ情報
+### 自動復旧機能
+```python
+# プロセス監視・再起動
+def monitor_processes():
+    for service in ['bluetooth', 'pulseaudio', 'hostapd']:
+        if not is_service_running(service):
+            restart_service(service)
+            log_warning(f"Restarted {service}")
+```
 
 ## 🎯 開発指示
 
 **Claude Code での実行手順:**
 
-1. **プロジェクト作成**
+1. **プロジェクト構造作成**
    ```bash
-   mkdir firetv-wireless-audio-system && cd firetv-wireless-audio-system
-   pio project init --board esp32dev
+   mkdir audio-bridge && cd audio-bridge
+   mkdir -p config/{bluetooth,pulseaudio,hostapd,dnsmasq,systemd}
+   mkdir -p src scripts logs
    ```
 
-2. **ファイル作成・実装**
-   - platformio.ini 設定
-   - src/main.cpp メインロジック
-   - src/bluetooth_a2dp.cpp A2DP実装
-   - include/config.h 設定定義
-   - README.md ドキュメント
+2. **セットアップスクリプト作成**
+   - setup.sh: 全自動セットアップ
+   - install_packages.sh: 必要パッケージインストール
+   - 設定ファイル一式
 
-3. **ビルド・テスト**
-   ```bash
-   pio run
-   pio run --target upload
-   pio device monitor
-   ```
+3. **アプリケーション実装**
+   - audio_bridge.py: メインアプリケーション
+   - 各コンポーネント（Bluetooth、音声、WiFi、HTTP）
+   - systemd サービス定義
 
-4. **Androidテスト**
-   - Bluetooth接続確認
-   - Spotify再生テスト
-   - ログ出力確認
+4. **テスト・検証**
+   - 仮想環境でのテスト
+   - 実機でのBluetooth接続テスト
+   - Fire TV Stick連携テスト
 
 **開発完了条件:**
-- すべてのファイルが作成されている
-- コンパイルエラーが0個
-- Android接続テストが成功
-- 音声データ受信ログが確認できる
+- すべてのファイル・スクリプトが作成されている
+- setup.sh で完全自動セットアップが可能
+- Android接続 → Fire TV Stick再生までの全工程が動作
 - README.mdが完成している
+- 30分間の安定動作を確認
 
-**Phase 1完了後の次ステップ:**
-Phase 2でWiFi AP + HTTPストリーミング実装に進む予定
+**技術方針:**
+- 既存のLinuxツール最大活用
+- Python中心の実装
+- systemd による堅牢なサービス管理
+- 包括的なエラーハンドリング・ログ機能
 
 ---
 
 **⚡ 今すぐ開始してください！ ⚡**
 
-このプロンプトに基づき、ESP32 Bluetooth-WiFi オーディオブリッジのPhase 1を完全実装してください。まずはBluetooth A2DP Sinkの基本動作を確実に動作させることが目標です。
+このプロンプトに基づき、Raspberry Pi Zero 2 W で確実に動作するBluetooth-WiFi音楽ブリッジを完全実装してください。ESP32の制約を完全に解決した、安定動作する車載音楽環境の構築が目標です。
