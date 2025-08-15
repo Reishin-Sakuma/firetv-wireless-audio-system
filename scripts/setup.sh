@@ -88,9 +88,15 @@ if python3 -c "import sys; exit(0 if sys.version_info >= (3,11) else 1)" 2>/dev/
         python3-pip \
         python3-venv
     
-    # pip専用パッケージは--break-system-packagesで対処
+    # pip専用パッケージは仮想環境で対処
     log_info "pip専用パッケージをインストール中..."
-    pip3 install --break-system-packages pulsectl netifaces
+    
+    # システム用仮想環境作成
+    python3 -m venv /opt/audio-bridge-venv --system-site-packages
+    /opt/audio-bridge-venv/bin/pip install pulsectl netifaces
+    
+    # pip警告を回避（最終手段として--break-system-packagesも併用）
+    pip3 install --break-system-packages --quiet pulsectl netifaces 2>/dev/null || true
     
 else
     log_info "Python 3.10以下 - pip経由でインストール"
@@ -102,10 +108,36 @@ log_step "Bluetooth設定中..."
 systemctl enable bluetooth
 systemctl start bluetooth
 
-# オーディオグループにpiユーザー追加
+# オーディオグループに現在のユーザー追加
 log_step "オーディオ権限設定中..."
-usermod -a -G audio pi
-usermod -a -G bluetooth pi
+
+# 現在のユーザー名を取得（sudo実行時の元ユーザー）
+if [ -n "$SUDO_USER" ]; then
+    AUDIO_USER="$SUDO_USER"
+elif [ -n "$USER" ]; then
+    AUDIO_USER="$USER"
+else
+    # フォールバック：最初の1000番台UID取得
+    AUDIO_USER=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 2000 { print $1; exit }')
+fi
+
+if [ -z "$AUDIO_USER" ]; then
+    log_warn "適切なユーザーが見つかりません。手動で権限設定してください"
+    AUDIO_USER="$USER"
+fi
+
+log_info "ユーザー '$AUDIO_USER' にオーディオ権限を付与中..."
+
+# ユーザー存在確認
+if id "$AUDIO_USER" >/dev/null 2>&1; then
+    usermod -a -G audio "$AUDIO_USER"
+    usermod -a -G bluetooth "$AUDIO_USER"
+    log_info "ユーザー '$AUDIO_USER' を audio, bluetooth グループに追加しました"
+else
+    log_error "ユーザー '$AUDIO_USER' が存在しません"
+    log_info "利用可能なユーザー: $(getent passwd | awk -F: '$3 >= 1000 { print $1 }' | tr '\n' ' ')"
+    exit 1
+fi
 
 # 設定ファイルコピー
 log_step "設定ファイルをコピー中..."
@@ -115,10 +147,10 @@ cp config/bluetooth/main.conf /etc/bluetooth/
 systemctl restart bluetooth
 
 # PulseAudio設定
-mkdir -p /home/pi/.pulse
+mkdir -p "/home/$AUDIO_USER/.pulse"
 cp config/pulseaudio/default.pa /etc/pulse/
 cp config/pulseaudio/daemon.conf /etc/pulse/
-chown -R pi:pi /home/pi/.pulse
+chown -R "$AUDIO_USER:$AUDIO_USER" "/home/$AUDIO_USER/.pulse"
 
 # hostapd設定
 cp config/hostapd/hostapd.conf /etc/hostapd/
@@ -129,6 +161,10 @@ cp config/dnsmasq/dnsmasq.conf /etc/dnsmasq.d/audiobridge.conf
 
 # systemd サービス設定
 cp config/systemd/audio-bridge.service /etc/systemd/system/
+
+# ユーザー名をサービスファイルに設定
+sed -i "s/User=%i/User=$AUDIO_USER/" /etc/systemd/system/audio-bridge.service
+
 systemctl daemon-reload
 
 # wpa_supplicant無効化（AP Mode用）
@@ -175,14 +211,20 @@ cp -r audio_bridge /opt/audio-bridge-pi/
 cp -r config /opt/audio-bridge-pi/
 cp requirements.txt /opt/audio-bridge-pi/
 cp setup.py /opt/audio-bridge-pi/
-chown -R pi:pi /opt/audio-bridge-pi
+chown -R "$AUDIO_USER:$AUDIO_USER" /opt/audio-bridge-pi
 
 # 実行可能バイナリ作成
-cat > /usr/local/bin/audio-bridge << 'EOF'
+cat > /usr/local/bin/audio-bridge << EOF
 #!/bin/bash
 cd /opt/audio-bridge-pi
-export PYTHONPATH="/opt/audio-bridge-pi:$PYTHONPATH"
-python3 -m audio_bridge.main "$@"
+export PYTHONPATH="/opt/audio-bridge-pi:\$PYTHONPATH"
+
+# 仮想環境があれば使用
+if [ -f /opt/audio-bridge-venv/bin/python3 ]; then
+    /opt/audio-bridge-venv/bin/python3 -m audio_bridge.main "\$@"
+else
+    python3 -m audio_bridge.main "\$@"
+fi
 EOF
 
 chmod +x /usr/local/bin/audio-bridge
@@ -191,7 +233,7 @@ log_info "AudioBridge-Pi を /opt/audio-bridge-pi にインストールしまし
 
 # ログディレクトリ作成
 mkdir -p /var/log/audio-bridge
-chown pi:pi /var/log/audio-bridge
+chown "$AUDIO_USER:$AUDIO_USER" /var/log/audio-bridge
 
 # 完了メッセージ
 log_info "セットアップが完了しました！"
