@@ -1,6 +1,7 @@
 #include "bluetooth_a2dp.h"
 #include "BluetoothA2DPSink.h"
 #include "esp_a2dp_api.h"
+#include "audio_buffer.h"
 #include <Arduino.h>
 #include <ESP.h>
 #include "esp_task_wdt.h"
@@ -111,10 +112,41 @@ void BluetoothA2DP::handleConnectionState(esp_a2d_connection_state_t state) {
 }
 
 void BluetoothA2DP::handleAudioData(const uint8_t* data, uint32_t len) {
-    // 音声データは受信するが処理は完全に無効化
-    // ウォッチドッグタイマー対策のため、何も処理しない
-    (void)data; // 未使用変数警告を回避
-    (void)len;  // 未使用変数警告を回避
+    // 音声データをバッファに書き込み
+    if (audioBuffer && data && len > 0) {
+        size_t written = audioBuffer->write(data, len);
+        
+        // バッファログ (5秒間隔)
+        static unsigned long lastLog = 0;
+        unsigned long currentTime = millis();
+        
+        if (currentTime - lastLog > 5000) {
+            size_t totalWrite, totalRead, currentLevel;
+            audioBuffer->getStats(totalWrite, totalRead, currentLevel);
+            
+            Serial.print("[AUDIO] Buffer: ");
+            Serial.print(currentLevel);
+            Serial.print("/");
+            Serial.print(AUDIO_BUFFER_SIZE * BUFFER_COUNT);
+            Serial.print(" bytes, Written: ");
+            Serial.print(totalWrite);
+            Serial.print(", Read: ");
+            Serial.println(totalRead);
+            
+            lastLog = currentTime;
+        }
+        
+        // バッファがフルの場合の警告
+        if (written < len) {
+            static unsigned long lastFullWarning = 0;
+            if (currentTime - lastFullWarning > 10000) {
+                Serial.print("[AUDIO] WARNING: Buffer full, dropped ");
+                Serial.print(len - written);
+                Serial.println(" bytes");
+                lastFullWarning = currentTime;
+            }
+        }
+    }
 }
 
 void BluetoothA2DP::attemptReconnection() {
