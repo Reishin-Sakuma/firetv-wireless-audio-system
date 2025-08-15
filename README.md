@@ -211,6 +211,16 @@ sudo systemctl restart bluetooth
 #### 2. WiFi AP起動失敗
 
 ```bash
+# hostapdサービスのマスク状態確認
+sudo systemctl is-enabled hostapd
+sudo systemctl unmask hostapd
+sudo systemctl enable hostapd
+
+# WiFiデバイス状態確認
+sudo rfkill list
+sudo rfkill unblock wlan
+sudo rfkill unblock wifi
+
 # インターフェース状態確認
 ip addr show wlan0
 

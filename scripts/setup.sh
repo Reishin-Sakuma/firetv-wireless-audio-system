@@ -156,6 +156,9 @@ chown -R "$AUDIO_USER:$AUDIO_USER" "/home/$AUDIO_USER/.pulse"
 cp config/hostapd/hostapd.conf /etc/hostapd/
 echo 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' > /etc/default/hostapd
 
+# hostapd マスク解除（設定時点で実行）
+systemctl unmask hostapd 2>/dev/null || true
+
 # dnsmasq設定
 cp config/dnsmasq/dnsmasq.conf /etc/dnsmasq.d/audiobridge.conf
 
@@ -171,6 +174,11 @@ systemctl daemon-reload
 log_step "WiFi設定中..."
 systemctl disable wpa_supplicant
 systemctl stop wpa_supplicant
+
+# WiFiデバイスのブロック解除
+log_info "WiFiデバイスのブロック状態を確認中..."
+rfkill unblock wlan 2>/dev/null || log_warn "rfkill unblock failed - continuing"
+rfkill unblock wifi 2>/dev/null || log_warn "rfkill wifi unblock failed - continuing"
 
 # ネットワーク設定
 log_step "ネットワーク設定中..."
@@ -198,9 +206,19 @@ iptables-save > /etc/iptables/rules.v4
 
 # サービス有効化
 log_step "サービスを有効化中..."
+
+# hostapd のマスク解除（Raspberry Pi OS対応）
+log_info "hostapd サービスのマスクを解除中..."
+systemctl unmask hostapd
 systemctl enable hostapd
+
+# dnsmasq有効化
 systemctl enable dnsmasq
+
+# audio-bridge サービス有効化
 systemctl enable audio-bridge
+
+log_info "全サービスが有効化されました"
 
 # アプリケーションインストール
 log_step "アプリケーションをインストール中..."
