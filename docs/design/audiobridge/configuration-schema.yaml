@@ -1,0 +1,890 @@
+# AudioBridge-Pi 設定ファイルスキーマ定義
+# YAML Schema for configuration validation and documentation
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://github.com/audiobridge-pi/schema/configuration.yaml"
+title: "AudioBridge-Pi Configuration Schema"
+description: "Complete configuration schema for AudioBridge-Pi wireless audio streaming system"
+version: "1.0.0"
+
+type: object
+additionalProperties: false
+
+properties:
+  # ==========================================================================
+  # システム全体設定
+  # ==========================================================================
+  system:
+    type: object
+    description: "System-wide configuration settings"
+    additionalProperties: false
+    properties:
+      name:
+        type: string
+        description: "System instance name"
+        default: "AudioBridge-Pi"
+        minLength: 1
+        maxLength: 32
+        pattern: "^[a-zA-Z0-9_-]+$"
+      
+      version:
+        type: string
+        description: "Configuration version for compatibility"
+        default: "1.0.0"
+        pattern: "^\\d+\\.\\d+\\.\\d+$"
+      
+      environment:
+        type: string
+        description: "Environment type"
+        default: "production"
+        enum: ["development", "testing", "production"]
+      
+      auto_recovery:
+        type: boolean
+        description: "Enable automatic recovery on failures"
+        default: true
+      
+      max_recovery_attempts:
+        type: integer
+        description: "Maximum recovery attempts before giving up"
+        default: 3
+        minimum: 1
+        maximum: 10
+      
+      health_check_interval:
+        type: integer
+        description: "Health check interval in seconds"
+        default: 30
+        minimum: 5
+        maximum: 300
+      
+      heartbeat_interval:
+        type: integer
+        description: "Heartbeat logging interval in seconds"
+        default: 60
+        minimum: 10
+        maximum: 600
+
+    required: ["name", "version"]
+
+  # ==========================================================================
+  # Bluetooth設定
+  # ==========================================================================
+  bluetooth:
+    type: object
+    description: "Bluetooth A2DP configuration"
+    additionalProperties: false
+    properties:
+      device_name:
+        type: string
+        description: "Bluetooth device name visible to other devices"
+        default: "AudioBridge-Pi"
+        minLength: 1
+        maxLength: 248  # Bluetooth name limit
+        pattern: "^[\\x20-\\x7E]*$"  # Printable ASCII
+      
+      device_class:
+        type: string
+        description: "Bluetooth device class (hex format)"
+        default: "0x200414"
+        pattern: "^0x[0-9A-Fa-f]{6}$"
+      
+      discoverable_timeout:
+        type: integer
+        description: "Discoverable timeout in seconds (0 = always)"
+        default: 0
+        minimum: 0
+        maximum: 65535
+      
+      pairable_timeout:
+        type: integer
+        description: "Pairable timeout in seconds (0 = always)"
+        default: 0
+        minimum: 0
+        maximum: 65535
+      
+      auto_connect:
+        type: boolean
+        description: "Enable automatic connection to paired devices"
+        default: true
+      
+      reconnect_interval:
+        type: integer
+        description: "Auto-reconnect interval in seconds"
+        default: 30
+        minimum: 10
+        maximum: 300
+      
+      max_connections:
+        type: integer
+        description: "Maximum simultaneous A2DP connections"
+        default: 1
+        minimum: 1
+        maximum: 3
+      
+      codec_priority:
+        type: array
+        description: "Audio codec priority list"
+        default: ["sbc", "aac", "aptx", "ldac"]
+        items:
+          type: string
+          enum: ["sbc", "aac", "aptx", "ldac"]
+        uniqueItems: true
+        minItems: 1
+      
+      sbc_bitpool:
+        type: integer
+        description: "SBC codec bitpool value (higher = better quality)"
+        default: 53
+        minimum: 2
+        maximum: 64
+      
+      trusted_devices:
+        type: array
+        description: "Pre-trusted device MAC addresses"
+        default: []
+        items:
+          type: string
+          pattern: "^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$"
+        uniqueItems: true
+
+    required: ["device_name"]
+
+  # ==========================================================================
+  # WiFi Access Point設定
+  # ==========================================================================
+  wifi:
+    type: object
+    description: "WiFi Access Point configuration"
+    additionalProperties: false
+    properties:
+      interface:
+        type: string
+        description: "WiFi interface name"
+        default: "wlan0"
+        pattern: "^[a-z][a-z0-9]*$"
+      
+      ssid:
+        type: string
+        description: "WiFi network name (SSID)"
+        default: "AudioBridge-Pi"
+        minLength: 1
+        maxLength: 32
+        # SSID can contain most printable characters
+        pattern: "^[\\x21-\\x7E ]{1,32}$"
+      
+      password:
+        type: string
+        description: "WiFi password (WPA2-PSK)"
+        default: "audiobridge123"
+        minLength: 8
+        maxLength: 63
+        # WPA2 passphrase requirements
+        pattern: "^[\\x21-\\x7E]{8,63}$"
+      
+      security:
+        type: string
+        description: "WiFi security type"
+        default: "wpa2-psk"
+        enum: ["open", "wep", "wpa-psk", "wpa2-psk", "wpa3-sae"]
+      
+      channel:
+        type: integer
+        description: "WiFi channel (2.4GHz band)"
+        default: 7
+        minimum: 1
+        maximum: 13  # European/Asian channels
+      
+      channel_width:
+        type: string
+        description: "Channel width"
+        default: "20"
+        enum: ["20", "40"]
+      
+      hidden_ssid:
+        type: boolean
+        description: "Hide SSID from broadcast"
+        default: false
+      
+      max_clients:
+        type: integer
+        description: "Maximum WiFi clients"
+        default: 5
+        minimum: 1
+        maximum: 16
+      
+      country_code:
+        type: string
+        description: "WiFi country code for regulatory compliance"
+        default: "US"
+        pattern: "^[A-Z]{2}$"
+      
+      # IP Configuration
+      ip_address:
+        type: string
+        description: "Access Point IP address"
+        default: "192.168.4.1"
+        pattern: "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+      
+      netmask:
+        type: string
+        description: "Network subnet mask"
+        default: "255.255.255.0"
+        pattern: "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+      
+      # DHCP Configuration
+      dhcp_start:
+        type: string
+        description: "DHCP range start IP"
+        default: "192.168.4.100"
+        pattern: "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+      
+      dhcp_end:
+        type: string
+        description: "DHCP range end IP"
+        default: "192.168.4.200"
+        pattern: "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+      
+      lease_time:
+        type: string
+        description: "DHCP lease time"
+        default: "24h"
+        pattern: "^\\d+[smhd]$"
+      
+      dns_servers:
+        type: array
+        description: "DNS servers to provide to clients"
+        default: ["8.8.8.8", "8.8.4.4"]
+        items:
+          type: string
+          pattern: "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+        maxItems: 3
+
+    required: ["ssid", "password", "ip_address"]
+
+  # ==========================================================================
+  # 音声処理設定
+  # ==========================================================================
+  audio:
+    type: object
+    description: "Audio pipeline configuration"
+    additionalProperties: false
+    properties:
+      sample_rate:
+        type: integer
+        description: "Audio sample rate in Hz"
+        default: 44100
+        enum: [8000, 16000, 22050, 44100, 48000, 96000]
+      
+      channels:
+        type: integer
+        description: "Number of audio channels"
+        default: 2
+        enum: [1, 2]  # Mono or Stereo
+      
+      bit_depth:
+        type: integer
+        description: "Audio bit depth"
+        default: 16
+        enum: [16, 24, 32]
+      
+      buffer_size:
+        type: integer
+        description: "Audio buffer size in bytes"
+        default: 4096
+        minimum: 1024
+        maximum: 16384
+        # Must be power of 2
+        multipleOf: 1024
+      
+      # Quality Settings
+      default_bitrate:
+        type: integer
+        description: "Default MP3 bitrate in kbps"
+        default: 128
+        enum: [64, 96, 128, 160, 192, 256, 320]
+      
+      quality_level:
+        type: string
+        description: "Audio quality level"
+        default: "medium"
+        enum: ["low", "medium", "high", "adaptive"]
+      
+      adaptive_quality:
+        type: boolean
+        description: "Enable adaptive bitrate based on network conditions"
+        default: true
+      
+      max_latency_ms:
+        type: integer
+        description: "Maximum acceptable audio latency in milliseconds"
+        default: 400
+        minimum: 50
+        maximum: 1000
+      
+      quality_check_interval:
+        type: integer
+        description: "Audio quality check interval in seconds"
+        default: 10
+        minimum: 1
+        maximum: 60
+      
+      # GStreamer Pipeline Configuration
+      gstreamer_pipeline:
+        type: object
+        description: "GStreamer pipeline elements configuration"
+        additionalProperties: false
+        properties:
+          source_element:
+            type: string
+            description: "Audio source element"
+            default: "pulsesrc"
+            enum: ["pulsesrc", "audiotestsrc", "alsasrc"]
+          
+          enable_fallback:
+            type: boolean
+            description: "Enable fallback audio generation"
+            default: true
+          
+          fallback_frequency:
+            type: integer
+            description: "Fallback test tone frequency in Hz"
+            default: 440
+            minimum: 20
+            maximum: 20000
+          
+          encoder_quality:
+            type: string
+            description: "MP3 encoder quality preset"
+            default: "standard"
+            enum: ["fast", "standard", "high"]
+
+    required: ["sample_rate", "channels", "default_bitrate"]
+
+  # ==========================================================================
+  # HTTP サーバー設定
+  # ==========================================================================
+  http:
+    type: object
+    description: "HTTP streaming server configuration"
+    additionalProperties: false
+    properties:
+      host:
+        type: string
+        description: "HTTP server bind address"
+        default: "0.0.0.0"
+        # IPv4 address or hostname
+        oneOf:
+          - pattern: "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+          - pattern: "^[a-zA-Z0-9.-]+$"
+      
+      port:
+        type: integer
+        description: "HTTP server port"
+        default: 8080
+        minimum: 1024
+        maximum: 65535
+      
+      max_clients:
+        type: integer
+        description: "Maximum simultaneous HTTP streaming clients"
+        default: 3
+        minimum: 1
+        maximum: 10
+      
+      chunk_size:
+        type: integer
+        description: "HTTP streaming chunk size in bytes"
+        default: 4096
+        minimum: 1024
+        maximum: 16384
+        multipleOf: 1024
+      
+      timeout_seconds:
+        type: integer
+        description: "Client connection timeout in seconds"
+        default: 30
+        minimum: 5
+        maximum: 300
+      
+      enable_cors:
+        type: boolean
+        description: "Enable CORS headers for web clients"
+        default: true
+      
+      enable_status_api:
+        type: boolean
+        description: "Enable status monitoring API"
+        default: true
+      
+      enable_control_api:
+        type: boolean
+        description: "Enable system control API"
+        default: false
+      
+      api_authentication:
+        type: boolean
+        description: "Require authentication for control API"
+        default: true
+      
+      # Content Type Settings
+      audio_mime_type:
+        type: string
+        description: "MIME type for audio streams"
+        default: "audio/mpeg"
+        pattern: "^audio/.+$"
+      
+      # Cache Settings
+      cache_control:
+        type: string
+        description: "HTTP Cache-Control header for audio streams"
+        default: "no-cache"
+        enum: ["no-cache", "no-store", "max-age=0"]
+
+    required: ["host", "port"]
+
+  # ==========================================================================
+  # ログ設定
+  # ==========================================================================
+  logging:
+    type: object
+    description: "Logging configuration"
+    additionalProperties: false
+    properties:
+      level:
+        type: string
+        description: "Log level"
+        default: "INFO"
+        enum: ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+      
+      console_output:
+        type: boolean
+        description: "Enable console logging"
+        default: true
+      
+      file_output:
+        type: boolean
+        description: "Enable file logging"
+        default: true
+      
+      file_path:
+        type: string
+        description: "Log file path"
+        default: "/var/log/audio-bridge/audio-bridge.log"
+        pattern: "^/.+\\.log$"
+      
+      max_file_size_mb:
+        type: integer
+        description: "Maximum log file size in MB"
+        default: 10
+        minimum: 1
+        maximum: 100
+      
+      backup_count:
+        type: integer
+        description: "Number of backup log files to keep"
+        default: 5
+        minimum: 0
+        maximum: 20
+      
+      log_format:
+        type: string
+        description: "Log message format"
+        default: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        minLength: 10
+      
+      date_format:
+        type: string
+        description: "Log timestamp format"
+        default: "%Y-%m-%d %H:%M:%S"
+        minLength: 5
+      
+      # Component-specific log levels
+      component_levels:
+        type: object
+        description: "Per-component log levels"
+        additionalProperties: false
+        properties:
+          bluetooth:
+            type: string
+            enum: ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+            default: "INFO"
+          wifi:
+            type: string
+            enum: ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+            default: "INFO"
+          audio:
+            type: string
+            enum: ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+            default: "INFO"
+          http:
+            type: string
+            enum: ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+            default: "INFO"
+          system:
+            type: string
+            enum: ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+            default: "INFO"
+
+  # ==========================================================================
+  # 監視・メトリクス設定
+  # ==========================================================================
+  monitoring:
+    type: object
+    description: "System monitoring and metrics configuration"
+    additionalProperties: false
+    properties:
+      enable_metrics:
+        type: boolean
+        description: "Enable system metrics collection"
+        default: true
+      
+      metrics_interval:
+        type: integer
+        description: "Metrics collection interval in seconds"
+        default: 30
+        minimum: 5
+        maximum: 300
+      
+      enable_performance_monitoring:
+        type: boolean
+        description: "Enable performance monitoring"
+        default: true
+      
+      cpu_temperature_warning:
+        type: integer
+        description: "CPU temperature warning threshold in Celsius"
+        default: 70
+        minimum: 50
+        maximum: 90
+      
+      cpu_usage_warning:
+        type: integer
+        description: "CPU usage warning threshold in percent"
+        default: 80
+        minimum: 50
+        maximum: 95
+      
+      memory_usage_warning:
+        type: integer
+        description: "Memory usage warning threshold in percent"
+        default: 85
+        minimum: 60
+        maximum: 95
+      
+      # Network monitoring
+      network_interface:
+        type: string
+        description: "Network interface to monitor"
+        default: "wlan0"
+        pattern: "^[a-z][a-z0-9]*$"
+      
+      bandwidth_monitoring:
+        type: boolean
+        description: "Enable network bandwidth monitoring"
+        default: true
+      
+      # Health check configuration
+      health_checks:
+        type: object
+        description: "Health check configuration"
+        additionalProperties: false
+        properties:
+          bluetooth_service:
+            type: boolean
+            description: "Monitor Bluetooth service health"
+            default: true
+          
+          wifi_service:
+            type: boolean
+            description: "Monitor WiFi service health"
+            default: true
+          
+          audio_pipeline:
+            type: boolean
+            description: "Monitor audio pipeline health"
+            default: true
+          
+          http_server:
+            type: boolean
+            description: "Monitor HTTP server health"
+            default: true
+
+  # ==========================================================================
+  # セキュリティ設定
+  # ==========================================================================
+  security:
+    type: object
+    description: "Security configuration"
+    additionalProperties: false
+    properties:
+      enable_firewall:
+        type: boolean
+        description: "Enable iptables firewall rules"
+        default: true
+      
+      allowed_ports:
+        type: array
+        description: "Allowed incoming ports"
+        default: [8080, 22]  # HTTP and SSH
+        items:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        uniqueItems: true
+      
+      rate_limiting:
+        type: object
+        description: "Rate limiting configuration"
+        additionalProperties: false
+        properties:
+          enable:
+            type: boolean
+            description: "Enable rate limiting"
+            default: true
+          
+          requests_per_minute:
+            type: integer
+            description: "Maximum requests per minute per IP"
+            default: 60
+            minimum: 10
+            maximum: 1000
+          
+          burst_size:
+            type: integer
+            description: "Burst size for rate limiting"
+            default: 10
+            minimum: 1
+            maximum: 100
+      
+      # Access control
+      access_control:
+        type: object
+        description: "Access control settings"
+        additionalProperties: false
+        properties:
+          allow_all:
+            type: boolean
+            description: "Allow connections from any IP (WiFi clients only)"
+            default: true
+          
+          blocked_mac_addresses:
+            type: array
+            description: "Blocked MAC addresses"
+            default: []
+            items:
+              type: string
+              pattern: "^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$"
+            uniqueItems: true
+          
+          allowed_ip_ranges:
+            type: array
+            description: "Allowed IP ranges (CIDR notation)"
+            default: ["192.168.4.0/24", "127.0.0.1/32"]
+            items:
+              type: string
+              # Basic CIDR pattern
+              pattern: "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/(?:[0-9]|[1-2][0-9]|3[0-2])$"
+
+  # ==========================================================================
+  # 高度な設定
+  # ==========================================================================
+  advanced:
+    type: object
+    description: "Advanced system configuration"
+    additionalProperties: false
+    properties:
+      # Development/Debug settings
+      debug_mode:
+        type: boolean
+        description: "Enable debug mode"
+        default: false
+      
+      profile_performance:
+        type: boolean
+        description: "Enable performance profiling"
+        default: false
+      
+      # Resource limits
+      cpu_affinity:
+        type: array
+        description: "CPU cores to use (0-based indices)"
+        items:
+          type: integer
+          minimum: 0
+          maximum: 7  # For Raspberry Pi Zero 2W
+        uniqueItems: true
+        maxItems: 4
+      
+      process_priority:
+        type: integer
+        description: "Process priority (-20 to 19, lower = higher priority)"
+        default: 0
+        minimum: -20
+        maximum: 19
+      
+      memory_limit_mb:
+        type: integer
+        description: "Memory usage limit in MB (0 = no limit)"
+        default: 0
+        minimum: 0
+        maximum: 512  # Raspberry Pi Zero 2W limit
+      
+      # Experimental features
+      experimental:
+        type: object
+        description: "Experimental features (use with caution)"
+        additionalProperties: false
+        properties:
+          enable_web_ui:
+            type: boolean
+            description: "Enable experimental web-based management UI"
+            default: false
+          
+          enable_mqtt:
+            type: boolean
+            description: "Enable MQTT integration for IoT platforms"
+            default: false
+          
+          mqtt_broker:
+            type: string
+            description: "MQTT broker URL"
+            default: "localhost:1883"
+            pattern: "^[a-zA-Z0-9.-]+:[0-9]+$"
+
+required: ["system", "bluetooth", "wifi", "audio", "http"]
+
+# =============================================================================
+# Examples and defaults
+# =============================================================================
+examples:
+  - description: "Minimal production configuration"
+    data:
+      system:
+        name: "AudioBridge-Pi"
+        version: "1.0.0"
+        environment: "production"
+      
+      bluetooth:
+        device_name: "My-AudioBridge"
+      
+      wifi:
+        ssid: "MyCarAudio"
+        password: "supersecure123"
+        channel: 1
+        ip_address: "192.168.10.1"
+        dhcp_start: "192.168.10.100"
+        dhcp_end: "192.168.10.200"
+      
+      audio:
+        sample_rate: 44100
+        channels: 2
+        default_bitrate: 192
+        quality_level: "high"
+      
+      http:
+        host: "0.0.0.0"
+        port: 8080
+
+  - description: "Development configuration with debugging"
+    data:
+      system:
+        name: "AudioBridge-Pi-Dev"
+        version: "1.0.0"
+        environment: "development"
+        health_check_interval: 10
+      
+      bluetooth:
+        device_name: "AudioBridge-Dev"
+        reconnect_interval: 15
+      
+      wifi:
+        ssid: "AudioBridge-Dev"
+        password: "devpassword123"
+      
+      audio:
+        default_bitrate: 128
+        quality_level: "adaptive"
+        adaptive_quality: true
+      
+      http:
+        port: 8080
+        enable_control_api: true
+      
+      logging:
+        level: "DEBUG"
+        component_levels:
+          bluetooth: "DEBUG"
+          audio: "DEBUG"
+      
+      advanced:
+        debug_mode: true
+        profile_performance: true
+
+  - description: "High-quality audio configuration"
+    data:
+      system:
+        name: "AudioBridge-HiFi"
+        version: "1.0.0"
+      
+      bluetooth:
+        device_name: "HiFi-AudioBridge"
+        codec_priority: ["ldac", "aptx", "aac", "sbc"]
+        sbc_bitpool: 64
+      
+      wifi:
+        ssid: "HiFi-Audio"
+        password: "audiophile2024"
+        channel: 6
+      
+      audio:
+        sample_rate: 48000
+        channels: 2
+        default_bitrate: 320
+        quality_level: "high"
+        adaptive_quality: false
+        max_latency_ms: 200
+        buffer_size: 8192
+      
+      http:
+        chunk_size: 8192
+        max_clients: 1  # Single high-quality stream
+
+# =============================================================================
+# Validation rules and constraints
+# =============================================================================
+definitions:
+  mac_address:
+    type: string
+    pattern: "^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$"
+    description: "MAC address in XX:XX:XX:XX:XX:XX or XX-XX-XX-XX-XX-XX format"
+  
+  ip_address:
+    type: string
+    pattern: "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+    description: "IPv4 address in dotted decimal notation"
+  
+  port_number:
+    type: integer
+    minimum: 1
+    maximum: 65535
+    description: "Valid TCP/UDP port number"
+  
+  positive_integer:
+    type: integer
+    minimum: 1
+    description: "Positive integer value"
+
+# Custom validation functions (to be implemented in application)
+custom_validations:
+  - name: "dhcp_range_validation"
+    description: "Ensure DHCP start IP is less than end IP and both are in the same subnet as AP IP"
+    
+  - name: "wifi_channel_country_validation"
+    description: "Validate WiFi channel is legal in specified country"
+    
+  - name: "audio_bitrate_compatibility"
+    description: "Ensure audio bitrate is compatible with selected quality level"
+    
+  - name: "resource_limits_validation"
+    description: "Validate resource limits are appropriate for Raspberry Pi Zero 2W"
