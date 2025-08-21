@@ -42,6 +42,27 @@ fi
 log_info "AudioBridge-Pi 安全セットアップを開始します..."
 log_warn "このスクリプトは段階的に実行され、手動での再起動が必要です"
 
+# プロジェクトルート事前チェック
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+log_info "スクリプト場所: $SCRIPT_DIR"
+log_info "プロジェクトルート: $PROJECT_ROOT"
+
+# 必要なファイル・ディレクトリの存在確認
+if [ ! -d "$PROJECT_ROOT/audio_bridge" ]; then
+    log_error "audio_bridge ディレクトリが見つかりません: $PROJECT_ROOT/audio_bridge"
+    log_error "プロジェクトルートディレクトリから実行してください"
+    log_info "正しい実行方法: cd /path/to/firetv-wireless-audio-system && sudo ./scripts/setup-safe.sh"
+    exit 1
+fi
+
+if [ ! -d "$PROJECT_ROOT/config" ]; then
+    log_error "config ディレクトリが見つかりません: $PROJECT_ROOT/config"
+    log_error "プロジェクトルートディレクトリから実行してください"
+    exit 1
+fi
+
 # 現在の接続状態確認
 CURRENT_CONNECTION=$(who am i | awk '{print $2}' | head -1)
 if [[ $CURRENT_CONNECTION =~ pts/* ]]; then
@@ -171,14 +192,45 @@ configure_basic_services() {
     fi
 
     log_step "設定ファイルをコピー中..."
+    
+    # スクリプトの場所を基準にプロジェクトルートを特定
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+    
+    log_info "プロジェクトルート: $PROJECT_ROOT"
+    
+    # 設定ファイル存在確認
+    if [ ! -d "$PROJECT_ROOT/config" ]; then
+        log_error "config ディレクトリが見つかりません: $PROJECT_ROOT/config"
+        log_info "現在のディレクトリから実行してください: cd /path/to/firetv-wireless-audio-system"
+        exit 1
+    fi
+    
     # Bluetooth設定
-    cp config/bluetooth/main.conf /etc/bluetooth/
-    systemctl restart bluetooth
+    if [ -f "$PROJECT_ROOT/config/bluetooth/main.conf" ]; then
+        cp "$PROJECT_ROOT/config/bluetooth/main.conf" /etc/bluetooth/
+        systemctl restart bluetooth
+        log_info "Bluetooth設定をコピーしました"
+    else
+        log_warn "Bluetooth設定ファイルが見つかりません: $PROJECT_ROOT/config/bluetooth/main.conf"
+    fi
 
     # PulseAudio設定
     mkdir -p "/home/$AUDIO_USER/.pulse"
-    cp config/pulseaudio/default.pa /etc/pulse/
-    cp config/pulseaudio/daemon.conf /etc/pulse/
+    if [ -f "$PROJECT_ROOT/config/pulseaudio/default.pa" ]; then
+        cp "$PROJECT_ROOT/config/pulseaudio/default.pa" /etc/pulse/
+        log_info "PulseAudio default.pa をコピーしました"
+    else
+        log_warn "PulseAudio default.pa が見つかりません"
+    fi
+    
+    if [ -f "$PROJECT_ROOT/config/pulseaudio/daemon.conf" ]; then
+        cp "$PROJECT_ROOT/config/pulseaudio/daemon.conf" /etc/pulse/
+        log_info "PulseAudio daemon.conf をコピーしました"
+    else
+        log_warn "PulseAudio daemon.conf が見つかりません"
+    fi
+    
     chown -R "$AUDIO_USER:$AUDIO_USER" "/home/$AUDIO_USER/.pulse"
 
     log_info "段階2完了: 基本サービス設定成功"
@@ -201,12 +253,30 @@ configure_network() {
     cp /etc/dhcpcd.conf /etc/dhcpcd.conf.backup || true
     cp /etc/dnsmasq.conf /etc/dnsmasq.conf.backup || true
 
+    # スクリプトの場所を基準にプロジェクトルートを特定
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+    
+    log_info "プロジェクトルート: $PROJECT_ROOT"
+    
     # hostapd設定
-    cp config/hostapd/hostapd.conf /etc/hostapd/
-    echo 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' > /etc/default/hostapd
+    if [ -f "$PROJECT_ROOT/config/hostapd/hostapd.conf" ]; then
+        cp "$PROJECT_ROOT/config/hostapd/hostapd.conf" /etc/hostapd/
+        echo 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' > /etc/default/hostapd
+        log_info "hostapd設定をコピーしました"
+    else
+        log_error "hostapd設定ファイルが見つかりません: $PROJECT_ROOT/config/hostapd/hostapd.conf"
+        exit 1
+    fi
 
     # dnsmasq設定
-    cp config/dnsmasq/dnsmasq.conf /etc/dnsmasq.d/audiobridge.conf
+    if [ -f "$PROJECT_ROOT/config/dnsmasq/dnsmasq.conf" ]; then
+        cp "$PROJECT_ROOT/config/dnsmasq/dnsmasq.conf" /etc/dnsmasq.d/audiobridge.conf
+        log_info "dnsmasq設定をコピーしました"
+    else
+        log_error "dnsmasq設定ファイルが見つかりません: $PROJECT_ROOT/config/dnsmasq/dnsmasq.conf"
+        exit 1
+    fi
 
     log_warn "NetworkManagerを無効化します（SSH切断の可能性）"
     systemctl disable NetworkManager || true
@@ -266,8 +336,18 @@ finalize_setup() {
     # dnsmasq有効化
     systemctl enable dnsmasq
 
+    # スクリプトの場所を基準にプロジェクトルートを特定
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+    
     # systemd サービス設定
-    cp config/systemd/audio-bridge.service /etc/systemd/system/
+    if [ -f "$PROJECT_ROOT/config/systemd/audio-bridge.service" ]; then
+        cp "$PROJECT_ROOT/config/systemd/audio-bridge.service" /etc/systemd/system/
+        log_info "systemd サービス設定をコピーしました"
+    else
+        log_error "systemd サービスファイルが見つかりません: $PROJECT_ROOT/config/systemd/audio-bridge.service"
+        exit 1
+    fi
     
     # ユーザー名をサービスファイルに設定
     if [ -n "$SUDO_USER" ]; then
@@ -284,10 +364,37 @@ finalize_setup() {
     log_step "アプリケーションをインストール中..."
     # アプリケーション用ディレクトリ作成
     mkdir -p /opt/audio-bridge-pi
-    cp -r audio_bridge /opt/audio-bridge-pi/
-    cp -r config /opt/audio-bridge-pi/
-    cp requirements.txt /opt/audio-bridge-pi/
-    cp setup.py /opt/audio-bridge-pi/
+    
+    # アプリケーションファイルコピー
+    if [ -d "$PROJECT_ROOT/audio_bridge" ]; then
+        cp -r "$PROJECT_ROOT/audio_bridge" /opt/audio-bridge-pi/
+        log_info "audio_bridge をコピーしました"
+    else
+        log_error "audio_bridge ディレクトリが見つかりません: $PROJECT_ROOT/audio_bridge"
+        exit 1
+    fi
+    
+    if [ -d "$PROJECT_ROOT/config" ]; then
+        cp -r "$PROJECT_ROOT/config" /opt/audio-bridge-pi/
+        log_info "config をコピーしました"
+    else
+        log_warn "config ディレクトリが見つかりません: $PROJECT_ROOT/config"
+    fi
+    
+    if [ -f "$PROJECT_ROOT/requirements.txt" ]; then
+        cp "$PROJECT_ROOT/requirements.txt" /opt/audio-bridge-pi/
+        log_info "requirements.txt をコピーしました"
+    else
+        log_warn "requirements.txt が見つかりません"
+    fi
+    
+    if [ -f "$PROJECT_ROOT/setup.py" ]; then
+        cp "$PROJECT_ROOT/setup.py" /opt/audio-bridge-pi/
+        log_info "setup.py をコピーしました"
+    else
+        log_warn "setup.py が見つかりません"
+    fi
+    
     chown -R "$AUDIO_USER:$AUDIO_USER" /opt/audio-bridge-pi
 
     # 実行可能バイナリ作成
