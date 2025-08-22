@@ -9,7 +9,8 @@
       "Bash(python -m platformio run)",
       "Bash(pio run:*)",
       "Bash(python:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(ssh:*)"
     ],
     "deny": []
   }
